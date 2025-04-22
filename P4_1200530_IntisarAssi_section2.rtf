@@ -1,0 +1,366 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2639
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 #include <stdio.h>   \
+#include <stdlib.h>  \
+#include <string.h>  \
+#include <stdbool.h> \
+#include <limits.h>  \
+#define MAX 100      // Maximum size for routers and adjacency matrix\
+\
+// Structure for a queue, used in BFS\
+typedef struct \{\
+    int items[MAX]; // Array to hold queue elements\
+    int front;      // Index of the front element\
+    int rear;       // Index of the rear element\
+\} Queue;\
+\
+// Function to initialize the queue\
+void initializeQueue(Queue *q) \{\
+    q->front = -1; // Indicates an empty queue\
+    q->rear = -1;  // Indicates an empty queue\
+\}\
+\
+// Function to check if the queue is empty\
+bool isQueueEmpty(Queue *q) \{\
+    return q->front == -1;\
+\}\
+\
+// Function to add an element to the queue\
+void enqueue(Queue *q, int value) \{\
+    if (q->rear == MAX - 1) \{ // Check if the queue is full\
+        printf("Queue is full!\\n");\
+        return;\
+    \}\
+    if (q->front == -1) \{ // If the queue is empty, set front to 0\
+        q->front = 0;\
+    \}\
+    q->items[++q->rear] = value; // Add the element to the rear\
+\}\
+\
+// Function to remove an element from the queue\
+int dequeue(Queue *q) \{\
+    if (isQueueEmpty(q)) \{ // Check if the queue is empty\
+        printf("Queue is empty!\\n");\
+        return -1;\
+    \}\
+    int value = q->items[q->front]; // Get the front element\
+    if (q->front == q->rear) \{      // If the queue has one element\
+        q->front = q->rear = -1;    // Reset the queue\
+    \} else \{\
+        q->front++; // Move the front pointer\
+    \}\
+    return value;\
+\}\
+\
+// Structure for a MinHeap, used in Dijkstra's algorithm\
+typedef struct \{\
+    int vertex;   // Vertex number\
+    int distance; // Distance from the source\
+\} MinHeapNode;\
+\
+typedef struct \{\
+    MinHeapNode nodes[MAX]; // Array to hold MinHeap nodes\
+    int size;               // Current size of the MinHeap\
+\} MinHeap;\
+\
+// Function to initialize the MinHeap\
+void initializeMinHeap(MinHeap *heap) \{\
+    heap->size = 0;\
+\}\
+\
+// Function to swap two MinHeap nodes\
+void swapMinHeapNodes(MinHeapNode *a, MinHeapNode *b) \{\
+    MinHeapNode temp = *a;\
+    *a = *b;\
+    *b = temp;\
+\}\
+\
+// Function to maintain the MinHeap property\
+void heapify(MinHeap *heap, int idx) \{\
+    int smallest = idx;                  // Initialize smallest as root\
+    int left = 2 * idx + 1;              // Left child index\
+    int right = 2 * idx + 2;             // Right child index\
+    if (left < heap->size && heap->nodes[left].distance < heap->nodes[smallest].distance)\
+        smallest = left;\
+    if (right < heap->size && heap->nodes[right].distance < heap->nodes[smallest].distance)\
+        smallest = right;\
+    if (smallest != idx) \{ // If the smallest is not the root\
+        swapMinHeapNodes(&heap->nodes[idx], &heap->nodes[smallest]);\
+        heapify(heap, smallest); // Recursively heapify the affected subtree\
+    \}\
+\}\
+\
+// Function to insert a new node into the MinHeap\
+void insertMinHeap(MinHeap *heap, int vertex, int distance) \{\
+    heap->size++;\
+    int i = heap->size - 1;\
+    heap->nodes[i].vertex = vertex;\
+    heap->nodes[i].distance = distance;\
+\
+    // Fix the MinHeap property if violated\
+    while (i != 0 && heap->nodes[(i - 1) / 2].distance > heap->nodes[i].distance) \{\
+        swapMinHeapNodes(&heap->nodes[i], &heap->nodes[(i - 1) / 2]);\
+        i = (i - 1) / 2;\
+    \}\
+\}\
+\
+// Function to extract the minimum node from the MinHeap\
+MinHeapNode extractMin(MinHeap *heap) \{\
+    if (heap->size <= 0) // If the heap is empty\
+        return (MinHeapNode)\{-1, INT_MAX\};\
+    if (heap->size == 1) \{ // If the heap has one element\
+        heap->size--;\
+        return heap->nodes[0];\
+    \}\
+\
+    MinHeapNode root = heap->nodes[0];\
+    heap->nodes[0] = heap->nodes[--heap->size];\
+    heapify(heap, 0); // Restore the MinHeap property\
+    return root;\
+\}\
+\
+// Function to check if the MinHeap is empty\
+bool isMinHeapEmpty(MinHeap *heap) \{\
+    return heap->size == 0;\
+\}\
+\
+// Function to load routers and construct the adjacency matrix from a file\
+void loadRouters(const char *filename, char routers[MAX][MAX], int adjacencyMatrix[MAX][MAX], int *numRouters) \{\
+    FILE *file = fopen(filename, "r"); // Open the file\
+    if (!file) \{                      // Check if the file exists\
+        printf("Error: Could not open file.\\n");\
+        exit(1);\
+    \}\
+\
+    char router1[MAX], router2[MAX];\
+    int latency;\
+    int routerCount = 0;\
+    *numRouters = 0;\
+\
+    // Initialize adjacency matrix with zeros\
+    for (int i = 0; i < MAX; i++) \{\
+        for (int j = 0; j < MAX; j++) \{\
+            adjacencyMatrix[i][j] = 0;\
+        \}\
+    \}\
+\
+    // Read edges from the file and populate the adjacency matrix\
+    while (fscanf(file, "%[^-]-%[^-]-%d\\n", router1, router2, &latency) == 3) \{\
+        int index1 = -1, index2 = -1;\
+        for (int i = 0; i < routerCount; i++) \{\
+            if (strcmp(routers[i], router1) == 0) index1 = i;\
+            if (strcmp(routers[i], router2) == 0) index2 = i;\
+        \}\
+        if (index1 == -1) \{ // Add router1 to the routers list\
+            strcpy(routers[routerCount], router1);\
+            index1 = routerCount++;\
+        \}\
+        if (index2 == -1) \{ // Add router2 to the routers list\
+            strcpy(routers[routerCount], router2);\
+            index2 = routerCount++;\
+        \}\
+\
+        // Update the adjacency matrix with the latency\
+        adjacencyMatrix[index1][index2] = latency;\
+        adjacencyMatrix[index2][index1] = latency; // For undirected graph\
+    \}\
+\
+    *numRouters = routerCount; // Update the total number of routers\
+    fclose(file);\
+\}\
+\
+// BFS algorithm to compute the shortest path\
+void bfs(int graph[MAX][MAX], int source, int destination, int numRouters, char routers[MAX][MAX], FILE *file) \{\
+    bool visited[MAX] = \{false\}; // Array to track visited nodes\
+    int parent[MAX];             // Array to store the parent of each node for path reconstruction\
+    Queue queue;                 // Queue for BFS traversal\
+    initializeQueue(&queue);\
+\
+    // Initialize parent array\
+    for (int i = 0; i < numRouters; i++) \{\
+        parent[i] = -1;\
+    \}\
+\
+    // Start BFS from the source node\
+    enqueue(&queue, source);\
+    visited[source] = true;\
+\
+    while (!isQueueEmpty(&queue)) \{\
+        int current = dequeue(&queue);\
+        if (current == destination) break; // Stop if the destination is reached\
+\
+        for (int i = 0; i < numRouters; i++) \{\
+            if (graph[current][i] && !visited[i]) \{ // Check for an edge and unvisited node\
+                visited[i] = true;\
+                parent[i] = current;\
+                enqueue(&queue, i);\
+            \}\
+        \}\
+    \}\
+\
+    // Trace the path from destination to source\
+    int path[MAX], pathLength = 0;\
+    for (int v = destination; v != -1; v = parent[v]) \{\
+        path[pathLength++] = v;\
+    \}\
+\
+    // Print and write the path\
+    fprintf(file, "BFS Algorithm:\\nPath: ");\
+    printf("BFS Algorithm:\\nPath: ");\
+    for (int i = pathLength - 1; i >= 0; i--) \{\
+        fprintf(file, "%s%s", routers[path[i]], i == 0 ? "\\n" : " -> ");\
+        printf("%s%s", routers[path[i]], i == 0 ? "\\n" : " -> ");\
+    \}\
+\
+    // Calculate the total cost\
+    int cost = 0;\
+    for (int i = pathLength - 1; i > 0; i--) \{\
+        cost += graph[path[i]][path[i - 1]];\
+    \}\
+\
+    fprintf(file, "Total cost: %d ms\\n", cost);\
+    printf("Total cost: %d ms\\n", cost);\
+\}\
+\
+// Dijkstra's algorithm using MinHeap\
+void dijkstra(int graph[MAX][MAX], int source, int destination, int numRouters, char routers[MAX][MAX], FILE *file) \{\
+    MinHeap heap;\
+    initializeMinHeap(&heap);\
+\
+    int dist[MAX];   // Distance from source\
+    int parent[MAX]; // Parent array for path reconstruction\
+    bool visited[MAX] = \{false\};\
+\
+    for (int i = 0; i < numRouters; i++) \{\
+        dist[i] = INT_MAX;\
+        parent[i] = -1;\
+    \}\
+    dist[source] = 0; // Distance to the source is 0\
+    insertMinHeap(&heap, source, 0);\
+\
+    while (!isMinHeapEmpty(&heap)) \{\
+        MinHeapNode minNode = extractMin(&heap);\
+        int u = minNode.vertex;\
+\
+        if (visited[u]) continue; // Skip if already visited\
+        visited[u] = true;\
+\
+        for (int v = 0; v < numRouters; v++) \{\
+            if (graph[u][v] && !visited[v] && dist[u] + graph[u][v] < dist[v]) \{\
+                dist[v] = dist[u] + graph[u][v];\
+                parent[v] = u;\
+                insertMinHeap(&heap, v, dist[v]);\
+            \}\
+        \}\
+    \}\
+\
+    // Trace the path from destination to source\
+    int path[MAX], pathLength = 0;\
+    for (int v = destination; v != -1; v = parent[v]) \{\
+        path[pathLength++] = v;\
+    \}\
+\
+    // Print and write the path\
+    fprintf(file, "Dijkstra's Algorithm:\\nPath: ");\
+    printf("Dijkstra's Algorithm:\\nPath: ");\
+    for (int i = pathLength - 1; i >= 0; i--) \{\
+        fprintf(file, "%s%s", routers[path[i]], i == 0 ? "\\n" : " -> ");\
+        printf("%s%s", routers[path[i]], i == 0 ? "\\n" : " -> ");\
+    \}\
+\
+    fprintf(file, "Total cost: %d ms\\n", dist[destination]);\
+    printf("Total cost: %d ms\\n", dist[destination]);\
+\}\
+\
+int main() \{\
+    char routers[MAX][MAX];       // Array to store router names\
+    int adjacencyMatrix[MAX][MAX]; // Adjacency matrix representing the graph\
+    int numRouters = 0;           // Total number of routers\
+\
+    char sourceRouter[MAX], destinationRouter[MAX];\
+    int source = -1, destination = -1;\
+\
+    while (1) \{\
+        printf("\\nMenu:\\n");\
+        printf("1. Load routers\\n");\
+        printf("2. Enter source\\n");\
+        printf("3. Enter destination and find shortest path\\n");\
+        printf("4. Exit\\n");\
+        printf("Enter your choice: ");\
+\
+        int choice;\
+        scanf("%d", &choice);\
+\
+        if (choice == 1) \{\
+            printf("Enter filename: ");\
+            char filename[MAX];\
+            scanf("%s", filename);\
+            loadRouters(filename, routers, adjacencyMatrix, &numRouters);\
+            printf("Routers loaded successfully ....\\n");\
+        \} else if (choice == 2) \{\
+            printf("Enter source router: ");\
+            scanf("%s", sourceRouter);\
+            for (int i = 0; i < numRouters; i++) \{\
+                if (strcmp(routers[i], sourceRouter) == 0) \{\
+                    source = i;\
+                    break;\
+                \}\
+            \}\
+            if (source == -1) \{\
+                printf("Source router not found....\\n");\
+            \} else \{\
+                printf("Source router set to %s.\\n", sourceRouter);\
+            \}\
+        \} else if (choice == 3) \{\
+            if (source == -1) \{\
+                printf("Source not set.\\n");\
+                continue;\
+            \}\
+\
+            printf("Enter destination router: ");\
+            scanf("%s", destinationRouter);\
+            for (int i = 0; i < numRouters; i++) \{\
+                if (strcmp(routers[i], destinationRouter) == 0) \{\
+                    destination = i;\
+                    break;\
+                \}\
+            \}\
+            if (destination == -1) \{\
+                printf("Destination router not found ....\\n");\
+                continue;\
+            \}\
+\
+            FILE *file = fopen("shortest_distance.txt", "w");\
+            if (!file) \{\
+                printf("Error: Could not create file shortest_distance.txt\\n");\
+                break;\
+            \}\
+\
+            fprintf(file, "Source Router: %s\\n", sourceRouter);\
+            fprintf(file, "Destination Router: %s\\n\\n", destinationRouter);\
+\
+            fprintf(file, "Shortest path using BFS:\\n");\
+            bfs(adjacencyMatrix, source, destination, numRouters, routers, file);\
+\
+            printf("\\nSaving Dijkstra results to file...\\n");\
+            fprintf(file, "\\nShortest path using Dijkstra's Algorithm:\\n");\
+            dijkstra(adjacencyMatrix, source, destination, numRouters, routers, file);\
+\
+            fclose(file);\
+            printf("Shortest path details saved to shortest_distance.txt\\n");\
+        \} else if (choice == 4) \{\
+            printf("Exiting...Have a nice day :)\\n");\
+            break;\
+        \} else \{\
+            printf("Invalid choice .... Please try again.\\n");\
+        \}\
+    \}\
+\
+    return 0;\
+\}\
+}
